@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- ========== [CONFIGURATION - แก้ไขตามของคุณ] ==========
 local CONFIG = {
     GITHUB_TOKEN = "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",  -- ใส่ Token ของคุณ
-    REPO_OWNER = "yourusername",                         -- ชื่อ GitHub
+    REPO_OWNER = "codeinealon888-design",                         -- ชื่อ GitHub
     REPO_NAME = "omega-private",                         -- ชื่อ Private Repo
     CORE_FILE = "core.lua",
     KEYS_FILE = "keys.json",
