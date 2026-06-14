@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ========== [CONFIGURATION - แก้ไขตรงนี้] ==========
-local GITHUB_TOKEN = "github_pat_xxxxxxxxxxxxxxxxxxxxx"  -- ใส่ Token ของคุณ
+local GITHUB_TOKEN = "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"  -- ใส่ Token ของคุณ
 local REPO_OWNER = "codeinealon888-design"                         -- ชื่อ GitHub ของคุณ
 local REPO_NAME = "omega-private"                        -- ชื่อ Private Repo
 local KEYS_FILE = "keys.json"                            -- ไฟล์ที่เก็บคีย์
