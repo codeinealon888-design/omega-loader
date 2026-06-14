@@ -1,22 +1,28 @@
--- OMEGA HUB V23 - Professional Loader
--- GitHub API + Private Repo + Token System
+-- OMEGA HUB V23 - Fixed Loader
+-- แก้ไขปัญหาค้างที่ "Contacting server..."
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ========== [CONFIGURATION - แก้ไขตามของคุณ] ==========
 local CONFIG = {
-    GITHUB_TOKEN = "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",  -- ใส่ Token ของคุณ
-    REPO_OWNER = "codeinealon888-design",                         -- ชื่อ GitHub
+    GITHUB_TOKEN = "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",  -- ใส่ Token จริง
+    REPO_OWNER = "codeinealon888-design",                         -- ใส่ชื่อ GitHub จริง
     REPO_NAME = "omega-private",                         -- ชื่อ Private Repo
     CORE_FILE = "core.lua",
     KEYS_FILE = "keys.json",
 }
 
+-- ตัวแปรเก็บสถานะ
 local keyGUI = nil
+local isVerifying = false
+
+-- ========== [DEBUG FUNCTION] ==========
+local function debugLog(msg)
+    print("[Omega-Debug] " .. msg)
+end
 
 -- ========== [GITHUB API FUNCTIONS] ==========
 local function getFileFromRepo(filePath)
@@ -31,17 +37,28 @@ local function getFileFromRepo(filePath)
         ["User-Agent"] = "Omega-Loader/1.0"
     }
     
+    debugLog("Requesting: " .. url)
+    
     local success, response = pcall(function()
         return HttpService:HttpGet(url, headers)
     end)
     
-    return success and response or nil
+    if success then
+        debugLog("Response received: " .. string.sub(response, 1, 100))
+        return response
+    else
+        debugLog("ERROR: " .. tostring(response))
+        return nil
+    end
 end
 
 -- ========== [KEY VALIDATION] ==========
 local function validateKey(inputKey)
+    debugLog("Validating key: " .. inputKey)
+    
     local keysData = getFileFromRepo(CONFIG.KEYS_FILE)
     if not keysData then
+        debugLog("Failed to get keys file")
         return false, "Cannot connect to server"
     end
     
@@ -50,16 +67,62 @@ local function validateKey(inputKey)
     end)
     
     if not success then
+        debugLog("JSON decode failed")
         return false, "Invalid data format"
     end
     
+    debugLog("Keys found: " .. tostring(#(data.keys or {})))
+    
     for _, validKey in ipairs(data.keys or {}) do
         if validKey == inputKey then
+            debugLog("Key matched: " .. validKey)
             return true, "Key validated"
         end
     end
     
+    debugLog("Key not found in list")
     return false, "Invalid license key"
+end
+
+-- ========== [LOAD CORE] ==========
+local function loadCore()
+    debugLog("Loading core script...")
+    
+    local coreData = getFileFromRepo(CONFIG.CORE_FILE)
+    if coreData then
+        debugLog("Core loaded, executing...")
+        local success, err = pcall(function()
+            loadstring(coreData)()
+        end)
+        if not success then
+            debugLog("Execution error: " .. tostring(err))
+            showError("Script error: " .. tostring(err):sub(1, 50))
+        end
+    else
+        debugLog("Core file not found!")
+        showError("Failed to load OMEGA core. Check your Private Repo.")
+    end
+end
+
+-- ========== [ERROR DISPLAY] ==========
+local function showError(msg)
+    local errGui = Instance.new("ScreenGui", CoreGui)
+    local frame = Instance.new("Frame", errGui)
+    frame.Size = UDim2.new(0, 350, 0, 80)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -40)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Text = "❌ " .. msg .. "\nCheck console for details"
+    label.TextColor3 = Color3.fromRGB(255, 100, 100)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 11
+    label.BackgroundTransparency = 1
+    
+    task.wait(5)
+    errGui:Destroy()
 end
 
 -- ========== [KEY GUI] ==========
@@ -119,13 +182,15 @@ local function createKeyGUI()
     local status = Instance.new("TextLabel", frame)
     status.Size = UDim2.new(1, 0, 0, 25)
     status.Position = UDim2.new(0, 0, 0, 210)
-    status.Text = "⚡ Waiting for key..."
+    status.Text = "⚡ Enter your key"
     status.TextColor3 = Color3.fromRGB(200, 200, 200)
     status.Font = Enum.Font.Gotham
     status.TextSize = 10
     status.BackgroundTransparency = 1
     
     activateBtn.MouseButton1Click:Connect(function()
+        if isVerifying then return end
+        
         local inputKey = keyBox.Text
         if inputKey == "" then
             status.Text = "⚠️ Please enter a key!"
@@ -133,51 +198,32 @@ local function createKeyGUI()
             return
         end
         
+        isVerifying = true
         status.Text = "🔍 Contacting server..."
         status.TextColor3 = Color3.fromRGB(255, 200, 0)
         activateBtn.Enabled = false
         
-        local isValid, msg = validateKey(inputKey)
-        
-        if isValid then
-            status.Text = "✅ " .. msg
-            status.TextColor3 = Color3.fromRGB(0, 255, 100)
-            task.wait(1)
-            keyGUI:Destroy()
-            loadCore()
-        else
-            status.Text = "❌ " .. msg
-            status.TextColor3 = Color3.fromRGB(255, 80, 80)
-            activateBtn.Enabled = true
-        end
+        -- ใช้ task.spawn เพื่อไม่ให้ GUI ค้าง
+        task.spawn(function()
+            local isValid, msg = validateKey(inputKey)
+            
+            if isValid then
+                status.Text = "✅ " .. msg
+                status.TextColor3 = Color3.fromRGB(0, 255, 100)
+                task.wait(0.5)
+                keyGUI:Destroy()
+                loadCore()
+            else
+                status.Text = "❌ " .. msg
+                status.TextColor3 = Color3.fromRGB(255, 80, 80)
+                activateBtn.Enabled = true
+                isVerifying = false
+            end
+        end)
     end)
 end
 
--- ========== [LOAD CORE] ==========
-local function loadCore()
-    local coreData = getFileFromRepo(CONFIG.CORE_FILE)
-    if coreData then
-        loadstring(coreData)()
-    else
-        local errGui = Instance.new("ScreenGui", CoreGui)
-        local frame = Instance.new("Frame", errGui)
-        frame.Size = UDim2.new(0, 300, 0, 60)
-        frame.Position = UDim2.new(0.5, -150, 0.5, -30)
-        frame.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-        
-        local label = Instance.new("TextLabel", frame)
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.Text = "❌ Failed to load OMEGA core!"
-        label.TextColor3 = Color3.fromRGB(255, 100, 100)
-        label.Font = Enum.Font.Gotham
-        label.TextSize = 12
-        label.BackgroundTransparency = 1
-        
-        task.wait(3)
-        errGui:Destroy()
-    end
-end
-
 -- ========== [START] ==========
+debugLog("OMEGA Loader Started")
+debugLog("Config: " .. CONFIG.REPO_OWNER .. "/" .. CONFIG.REPO_NAME)
 createKeyGUI()
